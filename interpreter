@@ -1,0 +1,111 @@
+#Alexander Rodriguez
+#Interpreter code using Python
+def interpret(program):
+    variables = {}
+    assignments = program.strip().split(";")
+    for assignment in assignments:
+        if assignment.strip():
+            parts = assignment.split("=")
+            if len(parts) != 2:
+                return "error"
+            var, expr = parts[0].strip(), parts[1].strip()
+            if not is_identifier(var):
+                return "error"
+            try:
+                value = evaluate(expr, variables)
+                variables[var] = value
+            except Exception:
+                return "error"
+    return "\n".join(f"{var} = {value}" for var, value in variables.items())
+
+def is_identifier(var):
+    if not var or not (var[0].isalpha() or var[0] == "_"):
+        return False
+    return all(c.isalnum() or c == "_" for c in var)
+
+def evaluate(expr, variables):
+    tokens = tokenize(expr)
+    postfix = to_postfix(tokens)
+    return eval_postfix(postfix, variables)
+
+def tokenize(expr):
+    tokens, num, i = [], "", 0
+    while i < len(expr):
+        c = expr[i]
+        if c.isdigit():
+            num += c
+        else:
+            if num:
+                tokens.append(num)
+                num = ""
+            if c in "+-*":
+                if c == "-" and (not tokens or tokens[-1] in "+-("):
+                    # Handle unary minus by adding an explicit zero
+                    tokens.append("0")
+                tokens.append(c)
+            elif c in "()":
+                tokens.append(c)
+            elif c.isalpha() or c == "_":
+                identifier = ""
+                while i < len(expr) and (expr[i].isalnum() or expr[i] == "_"):
+                    identifier += expr[i]
+                    i += 1
+                tokens.append(identifier)
+                continue
+            else:
+                raise ValueError("Invalid character in expression")
+        i += 1
+    if num:
+        tokens.append(num)
+    return tokens
+
+def to_postfix(tokens):
+    precedence = {'+': 1, '-': 1, '*': 2}
+    output, stack = [], []
+    for token in tokens:
+        if token.isdigit():
+            if token != "0" and token.lstrip("0") != token:
+                raise ValueError("Invalid literal")
+            output.append(int(token))
+        elif is_identifier(token):
+            output.append(token)
+        elif token in precedence:
+            while stack and precedence.get(stack[-1], 0) >= precedence[token]:
+                output.append(stack.pop())
+            stack.append(token)
+        elif token == '(':
+            stack.append(token)
+        elif token == ')':
+            while stack and stack[-1] != '(':
+                output.append(stack.pop())
+            if not stack or stack[-1] != '(':
+                raise ValueError("Mismatched parentheses")
+            stack.pop()
+    while stack:
+        output.append(stack.pop())
+    return output
+
+def eval_postfix(postfix, variables):
+    stack = []
+    for token in postfix:
+        if isinstance(token, int):
+            stack.append(token)
+        elif is_identifier(token):
+            if token not in variables:
+                raise ValueError("Uninitialized variable")
+            stack.append(variables[token])
+        else:
+            b, a = stack.pop(), stack.pop()
+            if token == '+':
+                stack.append(a + b)
+            elif token == '-':
+                stack.append(a - b)
+            elif token == '*':
+                stack.append(a * b)
+    return stack[0]
+
+# Tests
+print(interpret("x = 001;"))  # Output: error
+print(interpret("x_2 = 0;"))  # Output: x_2 = 0
+print(interpret("x = 0; y = x; z = ---(x+y);"))  # Output: error
+print(interpret("x = 1; y = 2; z = ---(x+y)*(x+-y);"))  # Output: x = 1\ny = 2\nz = 3
